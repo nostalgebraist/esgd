@@ -119,6 +119,13 @@ class ESGD(optim.Optimizer):
             with torch.enable_grad():
                 loss = closure()
 
+        using_amp = grad_scaler is not None
+
+        def to_fp32(x):
+            if x.dtype == torch.float16:
+                return x.float()
+            return x
+
         # Compute the squared Hessian diagonal estimate
         hvps_iter = None
         if self.should_create_graph():
@@ -137,7 +144,7 @@ class ESGD(optim.Optimizer):
                                 'create_graph is set to True.'
                             raise RuntimeError(msg)
                         params.append(p)
-                        grads.append(p.grad)
+                        grads.append(to_fp32(p.grad))
                         # Draw v from Rademacher distribution instead of normal as in ESGD paper
                         # to reduce variance.
                         vs.append(torch.randint_like(p.grad, 2) * 2 - 1)
@@ -145,7 +152,7 @@ class ESGD(optim.Optimizer):
                 nan_info = [(torch.isfinite(p.detach()).sum(), torch.ones_like(p).sum()) for p in hvps]
                 for ni in nan_info:
                     print(ni)
-                if grad_scaler is not None:
+                if using_amp:
                     inv_scale = 1./grad_scaler.get_scale()
                     hvps = [p * inv_scale for p in hvps]
 
