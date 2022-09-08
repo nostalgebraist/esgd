@@ -108,7 +108,7 @@ class ESGD(optim.Optimizer):
         return self.steps < self.d_warmup or self.steps_since_d >= self.update_d_every
 
     @torch.no_grad()
-    def step(self, closure=None):
+    def step(self, closure=None, grad_scaler=None):
         """Performs a single optimization step.
         Args:
             closure (callable, optional): A closure that reevaluates the model
@@ -142,6 +142,13 @@ class ESGD(optim.Optimizer):
                         # to reduce variance.
                         vs.append(torch.randint_like(p.grad, 2) * 2 - 1)
                 hvps = torch.autograd.grad(grads, params, grad_outputs=vs)
+                nan_info = [(torch.isfinite(p.detach()).sum(), torch.ones_like(p).sum()) for p in hvps]
+                for ni in nan_info:
+                    print(ni)
+                if grad_scaler is not None:
+                    inv_scale = 1./grad_scaler.get_scale()
+                    hvps = [p * inv_scale for p in hvps]
+
             hvps_iter = iter(hvps)
             self.steps_since_d = 0
 
